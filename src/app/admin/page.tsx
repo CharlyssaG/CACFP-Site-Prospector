@@ -12,6 +12,7 @@ const supabase = createClient(
 
 export default function AdminLogin() {
   const router = useRouter();
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -22,15 +23,13 @@ export default function AdminLogin() {
     setIsLoading(true);
     setError("");
 
-    const adminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL!;
-
     const { error: authError } = await supabase.auth.signInWithPassword({
-      email: adminEmail,
+      email,
       password,
     });
 
     if (authError) {
-      setError("Incorrect password. Please try again.");
+      setError("Incorrect email or password. Please try again.");
       setIsLoading(false);
       return;
     }
@@ -45,10 +44,7 @@ export default function AdminLogin() {
     >
       <div
         className="w-full max-w-sm mx-4 rounded-2xl p-8"
-        style={{
-          background: "white",
-          boxShadow: "0 8px 40px rgba(0,0,0,0.18)",
-        }}
+        style={{ background: "white", boxShadow: "0 8px 40px rgba(0,0,0,0.18)" }}
       >
         {/* Header */}
         <div className="text-center mb-8">
@@ -58,7 +54,7 @@ export default function AdminLogin() {
           >
             <Lock size={20} style={{ color: "var(--color-blue)" }} />
           </div>
-          <div className="text-sm font-semibold mb-1" style={{ color: "var(--color-ink-faint)" }}>
+          <div className="text-sm font-semibold mb-1">
             <span style={{ color: "var(--color-navy)" }}>Kid</span>
             <span style={{ color: "var(--color-blue)" }}>Kare</span>
           </div>
@@ -66,11 +62,21 @@ export default function AdminLogin() {
             Admin Access
           </h1>
           <p className="text-sm mt-1" style={{ color: "var(--color-muted-text)" }}>
-            Enter your password to continue
+            Sign in with your admin account
           </p>
         </div>
 
-        <form onSubmit={handleLogin} className="space-y-4">
+        <form onSubmit={handleLogin} className="space-y-3">
+          <input
+            type="email"
+            className="input-field"
+            placeholder="Email address"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            autoFocus
+            autoComplete="email"
+          />
+
           <div className="relative">
             <input
               type={showPassword ? "text" : "password"}
@@ -78,7 +84,7 @@ export default function AdminLogin() {
               placeholder="Password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              autoFocus
+              autoComplete="current-password"
             />
             <button
               type="button"
@@ -98,14 +104,12 @@ export default function AdminLogin() {
 
           <button
             type="submit"
-            className="btn-primary w-full flex items-center justify-center gap-2"
-            disabled={isLoading || !password}
+            className="btn-primary w-full flex items-center justify-center gap-2 !mt-5"
+            disabled={isLoading || !email || !password}
           >
-            {isLoading ? (
-              <span
-                className="inline-block w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"
-              />
-            ) : null}
+            {isLoading && (
+              <span className="inline-block w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+            )}
             {isLoading ? "Signing in..." : "Sign in"}
           </button>
         </form>
