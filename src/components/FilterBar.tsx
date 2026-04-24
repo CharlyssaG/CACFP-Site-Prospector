@@ -12,38 +12,39 @@ interface FilterBarProps {
 }
 
 export function FilterBar({
-  unsponsoredOnly,
-  nonprofitOnly,
-  forprofitOnly,
-  areaEligibleOnly,
-  licensedOnly,
-  sortBy,
-  onFilterChange,
-  onSortChange,
+  unsponsoredOnly, nonprofitOnly, forprofitOnly, areaEligibleOnly, licensedOnly,
+  sortBy, onFilterChange, onSortChange,
 }: FilterBarProps) {
   return (
-    <div className="flex flex-wrap items-center gap-x-5 gap-y-2 py-3 border-b" style={{ borderColor: "var(--color-border)" }}>
-      <span className="text-xs font-semibold tracking-wider uppercase" style={{ color: "var(--color-ink-faint)" }}>
+    <div
+      className="flex flex-wrap items-center gap-x-5 gap-y-2 py-3 border-b"
+      style={{ borderColor: "var(--color-subtle-border)" }}
+    >
+      <span
+        className="text-xs font-semibold tracking-widest uppercase"
+        style={{ color: "var(--color-ink-faint)" }}
+      >
         Filters
       </span>
 
       {[
         { key: "unsponsoredOnly", label: "Unsponsored", checked: unsponsoredOnly },
-        { key: "nonprofitOnly", label: "Nonprofit", checked: nonprofitOnly },
-        { key: "forprofitOnly", label: "For-profit", checked: forprofitOnly },
-        { key: "areaEligibleOnly", label: "Area eligible", checked: areaEligibleOnly },
-        { key: "licensedOnly", label: "Licensed", checked: licensedOnly },
+        { key: "nonprofitOnly",   label: "Nonprofit",   checked: nonprofitOnly },
+        { key: "forprofitOnly",   label: "For-profit",  checked: forprofitOnly },
+        { key: "areaEligibleOnly",label: "Area eligible",checked: areaEligibleOnly },
+        { key: "licensedOnly",    label: "Licensed",    checked: licensedOnly },
       ].map(({ key, label, checked }) => (
         <label
           key={key}
-          className="flex items-center gap-1.5 text-sm cursor-pointer select-none"
-          style={{ color: "var(--color-ink-muted)" }}
+          className="flex items-center gap-1.5 text-sm cursor-pointer select-none font-medium"
+          style={{ color: checked ? "var(--color-blue)" : "var(--color-ink-muted)" }}
         >
           <input
             type="checkbox"
             checked={checked}
             onChange={(e) => onFilterChange(key, e.target.checked)}
-            className="accent-[#1d8a50] w-3.5 h-3.5"
+            className="w-3.5 h-3.5 rounded"
+            style={{ accentColor: "var(--color-blue)" }}
           />
           {label}
         </label>
