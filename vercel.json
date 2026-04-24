@@ -4,8 +4,8 @@
   "outputDirectory": ".next",
   "installCommand": "npm install",
   "env": {
-    "NEXT_PUBLIC_SUPABASE_URL": "@supabase-url",
-    "NEXT_PUBLIC_SUPABASE_ANON_KEY": "@supabase-anon-key",
-    "SUPABASE_SERVICE_ROLE_KEY": "@supabase-service-role-key"
+    "NEXT_PUBLIC_SUPABASE_URL": "https://wmmwanvpmavvrgkfahka.supabase.co",
+    "NEXT_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndtbXdhbnZwbWF2dnJna2ZhaGthIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcwNDYyMjAsImV4cCI6MjA5MjYyMjIyMH0.TEumrpBCd7ykv2SMnOREFfJdD4j76mhsLNS4VqlAmzE",
+    "SUPABASE_SERVICE_ROLE_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndtbXdhbnZwbWF2dnJna2ZhaGthIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NzA0NjIyMCwiZXhwIjoyMDkyNjIyMjIwfQ._n4q7lEgDUNlMYTMvdW3dwRuayrV2nTBwgiPxWp_nUE"
   }
 }
