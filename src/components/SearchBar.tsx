@@ -11,14 +11,20 @@ interface SearchBarProps {
   isLoading: boolean;
 }
 
-export function SearchBar({ query, searchType, onQueryChange, onTypeChange, onSearch, isLoading }: SearchBarProps) {
+export function SearchBar({
+  query,
+  searchType,
+  onQueryChange,
+  onTypeChange,
+  onSearch,
+  isLoading,
+}: SearchBarProps) {
   return (
     <div className="flex flex-col sm:flex-row gap-2">
       <div className="relative flex-1">
         <MapPin
           size={16}
-          className="absolute left-3.5 top-1/2 -translate-y-1/2"
-          style={{ color: "var(--color-blue)" }}
+          className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-ink-faint)]"
         />
         <input
           type="text"
