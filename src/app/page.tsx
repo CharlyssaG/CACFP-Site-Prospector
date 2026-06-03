@@ -8,7 +8,7 @@ import { CenterCard } from "@/components/CenterCard";
 import { Legend } from "@/components/Legend";
 import { Pagination } from "@/components/Pagination";
 import { exportToCSV } from "@/lib/data";
-import type { Center, SearchStats, SearchFilters } from "@/types";
+import type { Center, SearchStats } from "@/types";
 import { Download, FileSearch } from "lucide-react";
 
 const PAGE_SIZE = 50;
@@ -19,45 +19,38 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
 
-  // All results for export + stats
   const [allCenters, setAllCenters] = useState<Center[]>([]);
   const [stats, setStats] = useState<SearchStats | null>(null);
-
-  // Pagination
   const [currentPage, setCurrentPage] = useState(1);
 
   // Filters
   const [unsponsoredOnly, setUnsponsoredOnly] = useState(false);
-  const [nonprofitOnly, setNonprofitOnly] = useState(false);
-  const [forprofitOnly, setForprofitOnly] = useState(false);
+  const [centerTypes, setCenterTypes] = useState<string[]>([]);   // empty = all
   const [areaEligibleOnly, setAreaEligibleOnly] = useState(false);
   const [licensedOnly, setLicensedOnly] = useState(false);
   const [sortBy, setSortBy] = useState("name");
 
-  // Ref so filter-triggered searches always use latest query
   const queryRef = useRef(query);
   queryRef.current = query;
 
   const doSearch = useCallback(
-    async (overrides: Partial<{
-      unsponsoredOnly: boolean;
-      nonprofitOnly: boolean;
-      forprofitOnly: boolean;
-      areaEligibleOnly: boolean;
-      licensedOnly: boolean;
-      sortBy: string;
-    }> = {}) => {
+    async (overrides: {
+      unsponsoredOnly?: boolean;
+      centerTypes?: string[];
+      areaEligibleOnly?: boolean;
+      licensedOnly?: boolean;
+      sortBy?: string;
+    } = {}) => {
       const q = queryRef.current.trim();
       if (!q) return;
 
       setIsLoading(true);
       setHasSearched(true);
-      setCurrentPage(1); // reset to page 1 on every new search
+      setCurrentPage(1);
 
       const effective = {
         unsponsoredOnly,
-        nonprofitOnly,
-        forprofitOnly,
+        centerTypes,
         areaEligibleOnly,
         licensedOnly,
         sortBy,
@@ -65,16 +58,12 @@ export default function Home() {
       };
 
       try {
-        // Fetch ALL results (up to 2000) for accurate stats + export
         const params = new URLSearchParams({
           q,
           type: searchType,
           unsponsored: String(effective.unsponsoredOnly),
-          centerType: effective.nonprofitOnly
-            ? "nonprofit"
-            : effective.forprofitOnly
-            ? "for-profit"
-            : "",
+          // Pass comma-separated list of selected types (empty = no filter)
+          centerTypes: effective.centerTypes.join(","),
           eligible: String(effective.areaEligibleOnly),
           licensed: String(effective.licensedOnly),
           sort: effective.sortBy,
@@ -95,22 +84,22 @@ export default function Home() {
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [query, searchType, unsponsoredOnly, nonprofitOnly, forprofitOnly, areaEligibleOnly, licensedOnly, sortBy]
+    [query, searchType, unsponsoredOnly, centerTypes, areaEligibleOnly, licensedOnly, sortBy]
   );
 
   const handleFilterChange = (key: string, value: boolean) => {
-    const updates: Record<string, boolean> = { [key]: value };
-    if (key === "nonprofitOnly" && value) updates.forprofitOnly = false;
-    if (key === "forprofitOnly" && value) updates.nonprofitOnly = false;
-
-    // Apply local state
-    if (key === "unsponsoredOnly") setUnsponsoredOnly(value);
-    if (key === "nonprofitOnly") { setNonprofitOnly(value); if (value) setForprofitOnly(false); }
-    if (key === "forprofitOnly") { setForprofitOnly(value); if (value) setNonprofitOnly(false); }
+    if (key === "unsponsoredOnly")  setUnsponsoredOnly(value);
     if (key === "areaEligibleOnly") setAreaEligibleOnly(value);
-    if (key === "licensedOnly") setLicensedOnly(value);
+    if (key === "licensedOnly")     setLicensedOnly(value);
+    setTimeout(() => doSearch({ [key]: value }), 50);
+  };
 
-    setTimeout(() => doSearch(updates), 50);
+  const handleCenterTypeChange = (type: string, checked: boolean) => {
+    const next = checked
+      ? [...centerTypes, type]
+      : centerTypes.filter((t) => t !== type);
+    setCenterTypes(next);
+    setTimeout(() => doSearch({ centerTypes: next }), 50);
   };
 
   const handleSortChange = (s: string) => {
@@ -120,7 +109,6 @@ export default function Home() {
 
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
-    // Scroll back to results top
     document.getElementById("results-top")?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
@@ -135,7 +123,6 @@ export default function Home() {
     URL.revokeObjectURL(url);
   };
 
-  // Slice the current page from all results
   const pagedCenters = allCenters.slice(
     (currentPage - 1) * PAGE_SIZE,
     currentPage * PAGE_SIZE
@@ -199,12 +186,12 @@ export default function Home() {
           <div>
             <FilterBar
               unsponsoredOnly={unsponsoredOnly}
-              nonprofitOnly={nonprofitOnly}
-              forprofitOnly={forprofitOnly}
+              centerTypes={centerTypes}
               areaEligibleOnly={areaEligibleOnly}
               licensedOnly={licensedOnly}
               sortBy={sortBy}
               onFilterChange={handleFilterChange}
+              onCenterTypeChange={handleCenterTypeChange}
               onSortChange={handleSortChange}
             />
 
@@ -214,7 +201,6 @@ export default function Home() {
               </div>
             )}
 
-            {/* Results header — anchor for scroll-to */}
             {!isLoading && allCenters.length > 0 && (
               <div
                 id="results-top"
@@ -233,7 +219,6 @@ export default function Home() {
               </div>
             )}
 
-            {/* Loading */}
             {isLoading && (
               <div
                 className="flex items-center justify-center gap-3 py-16 text-sm font-medium"
@@ -247,7 +232,6 @@ export default function Home() {
               </div>
             )}
 
-            {/* Results — current page only */}
             {!isLoading && pagedCenters.length > 0 && (
               <div className="space-y-3">
                 {pagedCenters.map((center, i) => (
@@ -256,7 +240,6 @@ export default function Home() {
               </div>
             )}
 
-            {/* Pagination */}
             {!isLoading && allCenters.length > PAGE_SIZE && (
               <Pagination
                 currentPage={currentPage}
@@ -267,7 +250,6 @@ export default function Home() {
               />
             )}
 
-            {/* Empty state */}
             {!isLoading && hasSearched && allCenters.length === 0 && (
               <div className="text-center py-16">
                 <FileSearch size={32} className="mx-auto mb-3" style={{ color: "var(--color-ink-faint)" }} />
@@ -279,7 +261,6 @@ export default function Home() {
           </div>
         )}
 
-        {/* Initial empty state */}
         {!hasSearched && (
           <>
             <div className="text-center py-14">
@@ -336,7 +317,6 @@ export default function Home() {
         )}
       </div>
 
-      {/* Footer */}
       <footer
         className="mt-16 py-6"
         style={{ borderTop: "1px solid var(--color-subtle-border)", background: "var(--color-white)" }}
