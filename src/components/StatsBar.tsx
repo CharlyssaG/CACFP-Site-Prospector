@@ -9,29 +9,35 @@ export function StatsBar({ stats }: { stats: SearchStats }) {
   const pctEligible = stats.total_count
     ? Math.round((stats.eligible_count / stats.total_count) * 100) : 0;
 
+  const typeBreakdown = [
+    stats.nonprofit_count  && `${stats.nonprofit_count} nonprofit`,
+    stats.forprofit_count  && `${stats.forprofit_count} for-profit`,
+    stats.headstart_count  && `${stats.headstart_count} Head Start`,
+  ].filter(Boolean).join(" · ") || "—";
+
   const items = [
     {
       icon: Building2,
       label: "Centers found",
-      value: stats.total_count,
-      sub: `${stats.nonprofit_count} nonprofit · ${stats.forprofit_count} for-profit`,
+      value: stats.total_count.toLocaleString(),
+      sub: typeBreakdown,
     },
     {
       icon: UserCheck,
       label: "Unsponsored",
-      value: stats.unsponsored_count,
+      value: stats.unsponsored_count.toLocaleString(),
       sub: `${pctUnsponsored}% — recruitment targets`,
     },
     {
       icon: ShieldCheck,
       label: "Area eligible",
-      value: stats.eligible_count,
+      value: stats.eligible_count.toLocaleString(),
       sub: `${pctEligible}% — 50%+ FRP area`,
     },
     {
       icon: Users,
       label: "Avg. capacity",
-      value: stats.avg_capacity,
+      value: stats.avg_capacity ?? "—",
       sub: "licensed children",
     },
   ];
