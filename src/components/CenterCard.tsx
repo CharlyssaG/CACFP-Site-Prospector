@@ -11,23 +11,38 @@ function Pill({ label, bg, fg }: { label: string; bg: string; fg: string }) {
   );
 }
 
+const TYPE_PILLS: Record<string, { label: string; bg: string; fg: string }> = {
+  "childcare-nonprofit":              { label: "Childcare Nonprofit",          bg: "var(--pill-nonprofit-bg)",  fg: "var(--pill-nonprofit-fg)" },
+  "childcare-forprofit":              { label: "Childcare For-profit",         bg: "var(--pill-forprofit-bg)",  fg: "var(--pill-forprofit-fg)" },
+  "head-start":                       { label: "Head Start",                   bg: "var(--pill-headstart-bg)",  fg: "var(--pill-headstart-fg)" },
+  "early-head-start":                 { label: "Early Head Start",             bg: "var(--pill-headstart-bg)",  fg: "var(--pill-headstart-fg)" },
+  "migrant-seasonal-head-start":      { label: "Migrant & Seasonal HS",        bg: "var(--pill-headstart-bg)",  fg: "var(--pill-headstart-fg)" },
+  "migrant-seasonal-early-head-start":{ label: "Migrant & Seasonal EHS",       bg: "var(--pill-headstart-bg)",  fg: "var(--pill-headstart-fg)" },
+  "aian-head-start":                  { label: "AIAN Head Start",              bg: "var(--pill-headstart-bg)",  fg: "var(--pill-headstart-fg)" },
+  "aian-early-head-start":            { label: "AIAN Early Head Start",        bg: "var(--pill-headstart-bg)",  fg: "var(--pill-headstart-fg)" },
+  "adult-care-program":               { label: "Adult Care Program",           bg: "var(--pill-unknown-bg)",    fg: "var(--pill-unknown-fg)" },
+  "aras-sfsp":                        { label: "ARAS / SFSP",                  bg: "var(--pill-unknown-bg)",    fg: "var(--pill-unknown-fg)" },
+  // legacy fallbacks
+  "nonprofit":                        { label: "Nonprofit",                    bg: "var(--pill-nonprofit-bg)",  fg: "var(--pill-nonprofit-fg)" },
+  "for-profit":                       { label: "For-profit",                   bg: "var(--pill-forprofit-bg)",  fg: "var(--pill-forprofit-fg)" },
+};
+
+const ELIG_PILLS: Record<string, { label: string; bg: string; fg: string }> = {
+  eligible:      { label: "Area eligible",       bg: "var(--pill-eligible-bg)", fg: "var(--pill-eligible-fg)" },
+  maybe:         { label: "Possibly eligible",   bg: "var(--pill-maybe-bg)",    fg: "var(--pill-maybe-fg)" },
+  unknown:       { label: "Eligibility unknown", bg: "var(--pill-unknown-bg)",  fg: "var(--pill-unknown-fg)" },
+  "not-eligible":{ label: "Not area eligible",   bg: "var(--pill-unknown-bg)",  fg: "var(--pill-unknown-fg)" },
+};
+
+const isForProfit = (t: string) => t === "childcare-forprofit" || t === "for-profit";
+const isHeadStart = (t: string) => t.includes("head-start") || t.includes("head_start");
+
 export function CenterCard({ center, index }: { center: Center; index: number }) {
-  const typePills: Record<string, { label: string; bg: string; fg: string }> = {
-    "head-start": { label: "Head Start",  bg: "var(--pill-headstart-bg)", fg: "var(--pill-headstart-fg)" },
-    nonprofit:    { label: "Nonprofit",   bg: "var(--pill-nonprofit-bg)", fg: "var(--pill-nonprofit-fg)" },
-    "for-profit": { label: "For-profit",  bg: "var(--pill-forprofit-bg)", fg: "var(--pill-forprofit-fg)" },
-  };
-
-  const eligPills: Record<string, { label: string; bg: string; fg: string }> = {
-    eligible:      { label: "Area eligible",       bg: "var(--pill-eligible-bg)", fg: "var(--pill-eligible-fg)" },
-    maybe:         { label: "Possibly eligible",   bg: "var(--pill-maybe-bg)",    fg: "var(--pill-maybe-fg)" },
-    unknown:       { label: "Eligibility unknown", bg: "var(--pill-unknown-bg)",  fg: "var(--pill-unknown-fg)" },
-    "not-eligible":{ label: "Not area eligible",   bg: "var(--pill-unknown-bg)",  fg: "var(--pill-unknown-fg)" },
-  };
-
-  const tp = typePills[center.center_type] || typePills.nonprofit;
-  const ep = eligPills[center.area_eligibility] || eligPills.unknown;
-  const meetsForProfitThreshold = center.center_type === "for-profit" && (center.subsidy_pct || 0) >= 25;
+  const tp = TYPE_PILLS[center.center_type] ?? TYPE_PILLS["childcare-nonprofit"];
+  const ep = ELIG_PILLS[center.area_eligibility] ?? ELIG_PILLS.unknown;
+  const forProfit = isForProfit(center.center_type);
+  const headStart = isHeadStart(center.center_type);
+  const meetsForProfitThreshold = forProfit && (center.subsidy_pct || 0) >= 25;
 
   return (
     <div
@@ -126,23 +141,18 @@ export function CenterCard({ center, index }: { center: Center; index: number })
       {/* Sponsor block */}
       {center.sponsor && (
         <div className="sponsor-block">
-          <div
-            className="text-[10px] font-semibold tracking-widest uppercase mb-1"
-            style={{ color: "var(--color-blue)" }}
-          >
+          <div className="text-[10px] font-semibold tracking-widest uppercase mb-1" style={{ color: "var(--color-blue)" }}>
             Current CACFP Sponsor
           </div>
           <div className="font-semibold text-sm" style={{ color: "var(--color-navy)" }}>{center.sponsor.name}</div>
           {center.sponsor.phone && (
-            <div className="text-xs mt-0.5" style={{ color: "var(--color-ink-muted)" }}>
-              {center.sponsor.phone}
-            </div>
+            <div className="text-xs mt-0.5" style={{ color: "var(--color-ink-muted)" }}>{center.sponsor.phone}</div>
           )}
         </div>
       )}
 
       {/* For-profit eligibility note */}
-      {center.center_type === "for-profit" && (
+      {forProfit && (
         <div
           className="flex items-start gap-2 rounded-xl px-3 py-2 mt-3 text-xs"
           style={{
@@ -161,6 +171,17 @@ export function CenterCard({ center, index }: { center: Center; index: number })
               ? " — meets 25% threshold for for-profit eligibility"
               : " — below 25% threshold, may not qualify"}
           </span>
+        </div>
+      )}
+
+      {/* Head Start auto-eligible note */}
+      {headStart && (
+        <div
+          className="flex items-start gap-2 rounded-xl px-3 py-2 mt-3 text-xs"
+          style={{ background: "var(--pill-eligible-bg)", color: "var(--color-navy)" }}
+        >
+          <ShieldCheck size={14} className="mt-0.5 shrink-0" style={{ color: "var(--color-blue)" }} />
+          <span>All enrolled children qualify for free meal reimbursement through CACFP.</span>
         </div>
       )}
     </div>
