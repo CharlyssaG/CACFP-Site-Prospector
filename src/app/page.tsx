@@ -9,29 +9,34 @@ import { Legend } from "@/components/Legend";
 import { Pagination } from "@/components/Pagination";
 import { exportToCSV } from "@/lib/data";
 import type { Center, SearchStats } from "@/types";
-import { Download, FileSearch } from "lucide-react";
+import { Download, FileSearch, Globe } from "lucide-react";
 
 const PAGE_SIZE = 50;
 
 export default function Home() {
   const [query, setQuery] = useState("");
   const [searchType, setSearchType] = useState("auto");
+  const [searchMode, setSearchMode] = useState<"database" | "web">("database");
   const [isLoading, setIsLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
 
   const [allCenters, setAllCenters] = useState<Center[]>([]);
   const [stats, setStats] = useState<SearchStats | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
+  const [lastSearchMode, setLastSearchMode] = useState<"database" | "web">("database");
+  const [webSavedCount, setWebSavedCount] = useState(0);
 
   // Filters
   const [unsponsoredOnly, setUnsponsoredOnly] = useState(false);
-  const [centerTypes, setCenterTypes] = useState<string[]>([]);   // empty = all
+  const [centerTypes, setCenterTypes] = useState<string[]>([]);
   const [areaEligibleOnly, setAreaEligibleOnly] = useState(false);
   const [licensedOnly, setLicensedOnly] = useState(false);
   const [sortBy, setSortBy] = useState("name");
 
   const queryRef = useRef(query);
   queryRef.current = query;
+  const modeRef = useRef(searchMode);
+  modeRef.current = searchMode;
 
   const doSearch = useCallback(
     async (overrides: {
@@ -42,41 +47,50 @@ export default function Home() {
       sortBy?: string;
     } = {}) => {
       const q = queryRef.current.trim();
+      const mode = modeRef.current;
       if (!q) return;
 
       setIsLoading(true);
       setHasSearched(true);
       setCurrentPage(1);
-
-      const effective = {
-        unsponsoredOnly,
-        centerTypes,
-        areaEligibleOnly,
-        licensedOnly,
-        sortBy,
-        ...overrides,
-      };
+      setLastSearchMode(mode);
+      setWebSavedCount(0);
 
       try {
-        const params = new URLSearchParams({
-          q,
-          type: searchType,
-          unsponsored: String(effective.unsponsoredOnly),
-          // Pass comma-separated list of selected types (empty = no filter)
-          centerTypes: effective.centerTypes.join(","),
-          eligible: String(effective.areaEligibleOnly),
-          licensed: String(effective.licensedOnly),
-          sort: effective.sortBy,
-          limit: "2000",
-          offset: "0",
-        });
+        if (mode === "web") {
+          // Web search — hits Claude with web search, auto-saves results
+          const params = new URLSearchParams({ q });
+          const res = await fetch(`/api/search/web?${params}`);
+          if (!res.ok) throw new Error("Web search failed");
+          const data = await res.json();
+          setAllCenters(data.centers || []);
+          setStats(data.stats || null);
+          setWebSavedCount(data.saved_count || 0);
+        } else {
+          // Database search
+          const effective = {
+            unsponsoredOnly, centerTypes, areaEligibleOnly, licensedOnly, sortBy,
+            ...overrides,
+          };
 
-        const res = await fetch(`/api/search?${params}`);
-        if (!res.ok) throw new Error("Search failed");
-        const data = await res.json();
+          const params = new URLSearchParams({
+            q,
+            type: searchType,
+            unsponsored: String(effective.unsponsoredOnly),
+            centerTypes: effective.centerTypes.join(","),
+            eligible: String(effective.areaEligibleOnly),
+            licensed: String(effective.licensedOnly),
+            sort: effective.sortBy,
+            limit: "2000",
+            offset: "0",
+          });
 
-        setAllCenters(data.centers || []);
-        setStats(data.stats || null);
+          const res = await fetch(`/api/search?${params}`);
+          if (!res.ok) throw new Error("Search failed");
+          const data = await res.json();
+          setAllCenters(data.centers || []);
+          setStats(data.stats || null);
+        }
       } catch (err) {
         console.error("Search failed:", err);
       } finally {
@@ -84,7 +98,7 @@ export default function Home() {
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [query, searchType, unsponsoredOnly, centerTypes, areaEligibleOnly, licensedOnly, sortBy]
+    [query, searchType, searchMode, unsponsoredOnly, centerTypes, areaEligibleOnly, licensedOnly, sortBy]
   );
 
   const handleFilterChange = (key: string, value: boolean) => {
@@ -95,9 +109,7 @@ export default function Home() {
   };
 
   const handleCenterTypeChange = (type: string, checked: boolean) => {
-    const next = checked
-      ? [...centerTypes, type]
-      : centerTypes.filter((t) => t !== type);
+    const next = checked ? [...centerTypes, type] : centerTypes.filter((t) => t !== type);
     setCenterTypes(next);
     setTimeout(() => doSearch({ centerTypes: next }), 50);
   };
@@ -152,7 +164,7 @@ export default function Home() {
               </h1>
               <p className="text-sm mt-2 max-w-xl font-normal leading-relaxed" style={{ color: "var(--color-muted-blue)" }}>
                 Find childcare centers eligible for the USDA Child and Adult Care Food Program.
-                Search by city, county, state, or ZIP to identify recruitment candidates.
+                Search your database or discover new sites from the web.
               </p>
             </div>
             <div
@@ -172,8 +184,10 @@ export default function Home() {
           <SearchBar
             query={query}
             searchType={searchType}
+            searchMode={searchMode}
             onQueryChange={setQuery}
             onTypeChange={setSearchType}
+            onModeChange={setSearchMode}
             onSearch={doSearch}
             isLoading={isLoading}
           />
@@ -184,16 +198,37 @@ export default function Home() {
       <div className="max-w-5xl mx-auto px-7 py-6">
         {hasSearched && (
           <div>
-            <FilterBar
-              unsponsoredOnly={unsponsoredOnly}
-              centerTypes={centerTypes}
-              areaEligibleOnly={areaEligibleOnly}
-              licensedOnly={licensedOnly}
-              sortBy={sortBy}
-              onFilterChange={handleFilterChange}
-              onCenterTypeChange={handleCenterTypeChange}
-              onSortChange={handleSortChange}
-            />
+            {/* Web search banner */}
+            {lastSearchMode === "web" && !isLoading && allCenters.length > 0 && (
+              <div
+                className="flex items-center gap-2 px-4 py-3 rounded-xl mb-4 text-sm"
+                style={{ background: "rgba(4,117,183,0.08)", border: "1px solid var(--color-subtle-border)" }}
+              >
+                <Globe size={14} style={{ color: "var(--color-blue)" }} />
+                <span style={{ color: "var(--color-navy)" }}>
+                  <strong>{allCenters.length} facilities</strong> found via web search
+                  {webSavedCount > 0 && (
+                    <span style={{ color: "var(--color-ink-muted)" }}>
+                      {" "}— {webSavedCount} new record{webSavedCount !== 1 ? "s" : ""} saved to database
+                    </span>
+                  )}
+                </span>
+              </div>
+            )}
+
+            {/* Filters — only show in database mode */}
+            {lastSearchMode === "database" && (
+              <FilterBar
+                unsponsoredOnly={unsponsoredOnly}
+                centerTypes={centerTypes}
+                areaEligibleOnly={areaEligibleOnly}
+                licensedOnly={licensedOnly}
+                sortBy={sortBy}
+                onFilterChange={handleFilterChange}
+                onCenterTypeChange={handleCenterTypeChange}
+                onSortChange={handleSortChange}
+              />
+            )}
 
             {stats && !isLoading && (
               <div className="mt-5">
@@ -228,7 +263,9 @@ export default function Home() {
                   className="inline-block w-5 h-5 border-2 rounded-full animate-spin"
                   style={{ borderColor: "var(--color-subtle-border)", borderTopColor: "var(--color-blue)" }}
                 />
-                Searching licensing databases &amp; CACFP records...
+                {lastSearchMode === "web"
+                  ? "Searching the web for CACFP-eligible facilities..."
+                  : "Searching licensing databases & CACFP records..."}
               </div>
             )}
 
@@ -254,7 +291,9 @@ export default function Home() {
               <div className="text-center py-16">
                 <FileSearch size={32} className="mx-auto mb-3" style={{ color: "var(--color-ink-faint)" }} />
                 <p className="text-sm" style={{ color: "var(--color-ink-muted)" }}>
-                  No centers found matching your search and filters. Try a different location or adjust your filter criteria.
+                  {lastSearchMode === "web"
+                    ? "No facilities found via web search. Try a more specific city or county name."
+                    : "No centers found matching your search and filters. Try a different location or adjust your filter criteria."}
                 </p>
               </div>
             )}
@@ -266,9 +305,8 @@ export default function Home() {
             <div className="text-center py-14">
               <FileSearch size={36} className="mx-auto mb-4" style={{ color: "var(--color-ink-faint)" }} />
               <p className="text-sm max-w-md mx-auto leading-relaxed" style={{ color: "var(--color-ink-muted)" }}>
-                Search by city, county, state, or ZIP code to find childcare centers
-                that may be eligible for the CACFP. Results include licensing status,
-                current sponsor info, area eligibility, and contact details.
+                Search your database of licensed childcare centers, or switch to Web Search
+                to discover new facilities and automatically add them to your database.
               </p>
             </div>
 
@@ -323,9 +361,9 @@ export default function Home() {
       >
         <div className="max-w-5xl mx-auto px-7">
           <p className="text-xs text-center" style={{ color: "var(--color-ink-faint)" }}>
-            Data sourced from state licensing databases and USDA CACFP records. Verify all information
-            with your state agency before outreach. This tool is for prospecting purposes only and does
-            not constitute official eligibility determination.
+            Data sourced from state licensing databases, USDA CACFP records, and web search.
+            Verify all information with your state agency before outreach. This tool is for
+            prospecting purposes only and does not constitute official eligibility determination.
           </p>
         </div>
       </footer>
