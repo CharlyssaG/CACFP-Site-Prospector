@@ -187,7 +187,13 @@ export default function Home() {
             searchMode={searchMode}
             onQueryChange={setQuery}
             onTypeChange={setSearchType}
-            onModeChange={setSearchMode}
+            onModeChange={(m) => {
+                setSearchMode(m);
+                setLastSearchMode(m);
+                setAllCenters([]);
+                setStats(null);
+                setHasSearched(false);
+              }}
             onSearch={doSearch}
             isLoading={isLoading}
           />
