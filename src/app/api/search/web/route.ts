@@ -10,36 +10,37 @@ const SYSTEM_PROMPT = `You are a CACFP (Child and Adult Care Food Program) site 
 When given a location, find childcare centers, daycare facilities, Head Start programs, 
 adult care programs, and similar CACFP-eligible sites in that area using web search.
 
-Return ONLY a valid JSON array of objects with these exact fields:
-{
-  "name": "string — facility name",
-  "address": "string — street address",
-  "city": "string",
-  "state": "string — 2-letter code",
-  "zip": "string — 5 digits",
-  "county": "string or null",
-  "phone": "string or null — formatted (XXX) XXX-XXXX",
-  "email": "string or null",
-  "director_name": "string or null",
-  "center_type": "one of: childcare-nonprofit, childcare-forprofit, head-start, early-head-start, migrant-seasonal-head-start, migrant-seasonal-early-head-start, aian-head-start, aian-early-head-start, adult-care-program, aras-sfsp",
-  "is_licensed": true or false,
-  "license_number": "string or null",
-  "licensed_capacity": number or null,
-  "area_eligibility": "one of: eligible, maybe, not-eligible, unknown",
-  "is_cacfp_participant": true or false,
-  "latitude": number or null,
-  "longitude": number or null,
-  "notes": "string or null — any relevant details"
-}
+Return ONLY a valid JSON array of objects with these exact fields (no preamble, no markdown, no backticks):
+[
+  {
+    "name": "string",
+    "address": "string",
+    "city": "string",
+    "state": "string — 2-letter code",
+    "zip": "string — 5 digits",
+    "county": "string or null",
+    "phone": "string or null",
+    "email": "string or null",
+    "director_name": "string or null",
+    "center_type": "childcare-nonprofit",
+    "is_licensed": true,
+    "license_number": "string or null",
+    "licensed_capacity": null,
+    "area_eligibility": "unknown",
+    "is_cacfp_participant": false,
+    "latitude": null,
+    "longitude": null,
+    "notes": "string or null"
+  }
+]
+
+center_type must be one of: childcare-nonprofit, childcare-forprofit, head-start, early-head-start, migrant-seasonal-head-start, migrant-seasonal-early-head-start, aian-head-start, aian-early-head-start, adult-care-program, aras-sfsp
 
 Rules:
-- Return 10-25 results when possible
-- Only include real, verifiable facilities you find via web search
-- Do not invent or hallucinate facilities
-- Prefer licensed childcare centers over unlicensed home daycares
-- Set area_eligibility to "eligible" if the area is known to be low-income, "unknown" otherwise
-- Set is_cacfp_participant to true only if you find evidence they are enrolled in CACFP
-- Return ONLY the JSON array, no preamble, no markdown, no backticks`;
+- Return 10-25 real, verifiable facilities found via web search
+- Do NOT invent or hallucinate facilities
+- Prefer licensed childcare centers
+- Return ONLY the raw JSON array`;
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -50,7 +51,6 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // Call Anthropic API with web search enabled
     const anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
@@ -60,109 +60,115 @@ export async function GET(request: NextRequest) {
         "anthropic-beta": "web-search-2025-03-05",
       },
       body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
+        model: "claude-opus-4-5",
         max_tokens: 4000,
         system: SYSTEM_PROMPT,
         tools: [{ type: "web_search_20250305", name: "web_search" }],
+        tool_choice: { type: "auto" },
         messages: [
           {
             role: "user",
-            content: `Find childcare centers, Head Start programs, adult care programs, and other CACFP-eligible facilities in or near: ${query}. Search for licensed childcare facilities in this location and return them as a JSON array.`,
+            content: `Find childcare centers, Head Start programs, adult care programs, and other CACFP-eligible facilities in: ${query}. Use web search to find real licensed facilities and return them as a JSON array only.`,
           },
         ],
       }),
     });
 
-    if (!anthropicRes.ok) {
-      const err = await anthropicRes.text();
-      return NextResponse.json({ error: `Anthropic API error: ${err}` }, { status: 500 });
-    }
-
+    // Always log the raw response for debugging
     const anthropicData = await anthropicRes.json();
 
-    // Extract text content from response (may be across multiple blocks)
-    const textContent = anthropicData.content
-      ?.filter((b: any) => b.type === "text")
-      ?.map((b: any) => b.text)
-      ?.join("") || "";
-
-    // Parse JSON from response
-    let facilities: any[] = [];
-    try {
-      // Strip any accidental markdown fences
-      const clean = textContent.replace(/```json|```/g, "").trim();
-      // Find the JSON array
-      const match = clean.match(/\[[\s\S]*\]/);
-      if (match) {
-        facilities = JSON.parse(match[0]);
-      }
-    } catch {
+    if (!anthropicRes.ok) {
+      console.error("Anthropic error:", JSON.stringify(anthropicData));
       return NextResponse.json(
-        { error: "Failed to parse search results. Try a more specific location." },
+        { error: `Anthropic API error: ${anthropicData?.error?.message || anthropicRes.status}` },
         { status: 500 }
       );
+    }
+
+    // Log stop reason to help debug
+    console.log("Anthropic stop_reason:", anthropicData.stop_reason);
+    console.log("Anthropic content blocks:", anthropicData.content?.map((b: any) => b.type));
+
+    // Extract all text blocks
+    const textContent = (anthropicData.content || [])
+      .filter((b: any) => b.type === "text")
+      .map((b: any) => b.text)
+      .join("");
+
+    console.log("Text content length:", textContent.length);
+    console.log("Text content preview:", textContent.slice(0, 300));
+
+    // Parse JSON array from response
+    let facilities: any[] = [];
+    const clean = textContent.replace(/```json|```/g, "").trim();
+    const match = clean.match(/\[[\s\S]*\]/);
+    if (match) {
+      try {
+        facilities = JSON.parse(match[0]);
+      } catch (parseErr) {
+        console.error("JSON parse error:", parseErr);
+        return NextResponse.json(
+          { error: "Could not parse results. Try a more specific location." },
+          { status: 500 }
+        );
+      }
+    } else {
+      console.error("No JSON array found in response:", clean.slice(0, 500));
+      return NextResponse.json({ centers: [], stats: null, debug: clean.slice(0, 200) });
     }
 
     if (!Array.isArray(facilities) || facilities.length === 0) {
       return NextResponse.json({ centers: [], stats: null });
     }
 
-    // Normalize and save to Supabase
+    // Normalize
     const now = new Date().toISOString();
     const toInsert = facilities
       .filter((f) => f.name && f.address && f.city && f.state)
       .map((f) => ({
-        name:                f.name?.trim(),
-        address:             f.address?.trim(),
-        city:                f.city?.trim(),
-        state:               f.state?.trim().toUpperCase().slice(0, 2),
-        zip:                 (f.zip || "").trim().slice(0, 10) || "00000",
-        county:              f.county || null,
-        phone:               f.phone || null,
-        email:               f.email?.toLowerCase() || null,
-        director_name:       f.director_name || null,
-        center_type:         f.center_type || "childcare-nonprofit",
-        is_licensed:         f.is_licensed ?? true,
-        license_number:      f.license_number || null,
-        licensed_capacity:   f.licensed_capacity || null,
-        current_enrollment:  null,
-        area_eligibility:    f.area_eligibility || "unknown",
-        frp_percentage:      null,
-        subsidy_pct:         null,
+        name:                 f.name?.trim(),
+        address:              f.address?.trim(),
+        city:                 f.city?.trim(),
+        state:                f.state?.trim().toUpperCase().slice(0, 2),
+        zip:                  (f.zip || "00000").trim().slice(0, 10),
+        county:               f.county || null,
+        phone:                f.phone || null,
+        email:                f.email?.toLowerCase() || null,
+        director_name:        f.director_name || null,
+        center_type:          f.center_type || "childcare-nonprofit",
+        is_licensed:          f.is_licensed ?? true,
+        license_number:       f.license_number || null,
+        licensed_capacity:    f.licensed_capacity || null,
+        current_enrollment:   null,
+        area_eligibility:     f.area_eligibility || "unknown",
+        frp_percentage:       null,
+        subsidy_pct:          null,
         is_cacfp_participant: f.is_cacfp_participant ?? false,
-        latitude:            f.latitude || null,
-        longitude:           f.longitude || null,
-        notes:               f.notes || null,
-        source:              "web-search",
-        last_verified_at:    now,
+        latitude:             f.latitude || null,
+        longitude:            f.longitude || null,
+        notes:                f.notes || null,
+        source:               "web-search",
+        last_verified_at:     now,
       }));
 
-    // Upsert — skip exact duplicates by name + city + state
-    const { data: saved, error: saveError } = await adminSupabase
+    // Try upsert first, fall back to insert
+    let results: any[] = [];
+    const { data: upserted, error: upsertError } = await adminSupabase
       .from("centers")
-      .upsert(toInsert, {
-        onConflict: "name,city,state",
-        ignoreDuplicates: true,
-      })
+      .upsert(toInsert, { onConflict: "name,city,state", ignoreDuplicates: true })
       .select("*, sponsor:sponsors(*)");
 
-    if (saveError) {
-      // If upsert fails (e.g. no unique constraint), fall back to plain insert
+    if (upsertError) {
+      console.error("Upsert error, falling back to insert:", upsertError.message);
       const { data: inserted } = await adminSupabase
         .from("centers")
         .insert(toInsert)
         .select("*, sponsor:sponsors(*)");
-
-      const results = inserted || [];
-      return NextResponse.json({
-        centers: results,
-        stats: buildStats(results),
-        source: "web-search",
-        saved_count: results.length,
-      });
+      results = inserted || [];
+    } else {
+      results = upserted || [];
     }
 
-    const results = saved || [];
     return NextResponse.json({
       centers: results,
       stats: buildStats(results),
@@ -171,6 +177,7 @@ export async function GET(request: NextRequest) {
     });
 
   } catch (err: any) {
+    console.error("Web search caught error:", err);
     return NextResponse.json(
       { error: err.message || "Web search failed" },
       { status: 500 }
@@ -192,9 +199,9 @@ function buildStats(results: any[]) {
     avg_capacity:      total
       ? Math.round(results.reduce((s, c) => s + (c.licensed_capacity || 0), 0) / total)
       : 0,
-    nonprofit_count:   results.filter((c) => c.center_type === "childcare-nonprofit").length,
-    forprofit_count:   results.filter((c) => c.center_type === "childcare-forprofit").length,
-    headstart_count:   results.filter((c) => HEAD_START_TYPES.includes(c.center_type)).length,
-    licensed_count:    results.filter((c) => c.is_licensed).length,
+    nonprofit_count:  results.filter((c) => c.center_type === "childcare-nonprofit").length,
+    forprofit_count:  results.filter((c) => c.center_type === "childcare-forprofit").length,
+    headstart_count:  results.filter((c) => HEAD_START_TYPES.includes(c.center_type)).length,
+    licensed_count:   results.filter((c) => c.is_licensed).length,
   };
 }
